@@ -13,7 +13,7 @@ import org.apache.kafka.streams.{KafkaStreams, StreamsConfig, KeyValue}
 import org.apache.kafka.common.serialization.{Serde, Serdes}
 import org.apache.kafka.streams.kstream._
 
-import collection.JavaConverters._
+import scala.collection.JavaConverters._
 
 
 //sbt "run --bootstrap-servers localhost:9092 --input-topic inJson --output-topic outJson --jq-filter "'{"this":.data,"@context":"http://schema.org/lights"}'
@@ -67,11 +67,17 @@ object JQTransformationStream {
     val streamBuilder = new KStreamBuilder
     val rawStream: KStream[String, Array[Byte]] = streamBuilder.stream(Serdes.String, Serdes.ByteArray, inputTopic)
 
-    val jqTranformStream: KStream[String, JsonNode] = rawStream.mapValues(new ValueMapper[Array[Byte], JsonNode] {
-      override def apply(value: Array[Byte]): JsonNode = {
-        val in: JsonNode = MAPPER.readTree(value)
-        val result: Seq[JsonNode] = jqTransform.apply(in)
-        return result(0) // Only return first element
+    val jqTranformStream: KStream[String, JsonNode] = rawStream.flatMapValues(new ValueMapper[Array[Byte], java.lang.Iterable[JsonNode]] {
+      override def apply(value: Array[Byte]): java.lang.Iterable[JsonNode] = {
+        try {
+          val in: JsonNode = MAPPER.readTree(value)
+          val result: Seq[JsonNode] = jqTransform.apply(in)
+          return List(result(0)).asJava // Only return first element
+        } catch {
+          case e: Exception =>
+            println("Dropping invalid payload ...")
+            return List().asJava
+        }
       }
     })
 
