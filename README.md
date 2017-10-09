@@ -21,3 +21,14 @@ Usage
 
 4. Read the transformed payload from the `outJson` topic
 
+Packaging
+---------
+
+To create the standalone jar, execute:
+
+    $ sbt assembly
+
+Run it with:
+
+    $ java -jar target/scala-2.12/KafkaStreamingJq-assembly-0.1.0-SNAPSHOT.jar
+
