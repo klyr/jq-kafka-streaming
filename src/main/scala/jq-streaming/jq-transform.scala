@@ -15,7 +15,6 @@ import org.apache.kafka.streams.kstream._
 
 import scala.collection.JavaConverters._
 
-
 //sbt "run --bootstrap-servers localhost:9092 --input-topic inJson --output-topic outJson --jq-filter "'{"this":.data,"@context":"http://schema.org/lights"}'
 
 class JQTransformation(val filter: String) {
@@ -34,11 +33,11 @@ class JQTransformation(val filter: String) {
 
 object JQTransformationStream {
   val usage = """
-    Usage: jq-stream --bootstrap-servers <server1, server2> --input-topic <topic> --output-topic <topic> --jq-filter <filter>
+    Usage: jq-stream --bootstrap-servers <server1, server2> --input-topic <topic> --output-topic <topic> --jq-filter <filter> [--rest-port <port>]
   """
 
   def main(args: Array[String]): Unit = {
-    if (args.length != 8) {
+    if (args.length < 8) {
       println(usage)
       System.exit(-1)
     }
@@ -47,11 +46,13 @@ object JQTransformationStream {
     var inputTopic = ""
     var outputTopic = ""
     var jqFilter = ""
+    var restPort: Int = 0
     args.sliding(2, 2).toList.collect {
       case Array("--bootstrap-servers", a: String) => bootstrapServers = a
       case Array("--input-topic", a: String) => inputTopic = a
       case Array("--output-topic", a: String) => outputTopic = a
       case Array("--jq-filter", a: String) => jqFilter = a
+      case Array("--rest-port", a: String) => restPort = a.toInt
     }
 
     val settings = new Properties
@@ -96,7 +97,9 @@ object JQTransformationStream {
 
     println(s"Reading data from $inputTopic, applying filter '$jqFilter', writing to $outputTopic")
 
-    println("Let's start the http server ...")
-    RestProxy.startServer("localhost", 8888)
+    if (restPort != 0) {
+      println("Let's start the http server ...")
+      RestProxy.startServer("localhost", 8888)
+    }
   }
 }
