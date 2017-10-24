@@ -15,45 +15,66 @@ import org.apache.kafka.streams.kstream._
 
 import scala.collection.JavaConverters._
 
-//sbt "run --bootstrap-servers localhost:9092 --input-topic inJson --output-topic outJson --jq-filter "'{"this":.data,"@context":"http://schema.org/lights"}'
-
-class JQTransformation(val filter: String) {
-
-  val compiledFilter: JsonQuery = JsonQuery.compile(filter)
-
-  def apply(source: String): String = {
-    return source
-  }
-
-  def apply(source: JsonNode): Seq[JsonNode] = {
-    val jqTransformed = compiledFilter.apply(source).asScala
-    return jqTransformed
-  }
-}
+//sbt "run --bootstrap-servers localhost:9092 inJson outJson "'{"this":.data,"@context":"http://schema.org/lights"}' inJson_2 outJson_2 "'{"this":.data,"@context":"http://schema.org/pollution"}'"
 
 object JQTransformationStream {
   val usage = """
-    Usage: jq-stream --bootstrap-servers <server1, server2> --input-topic <topic> --output-topic <topic> --jq-filter <filter> [--rest-port <port>]
+    Usage: jq-stream --bootstrap-servers <server1 [serverN]...> [--rest-port <port>] <input-topic> <output-topic> <jq-filter> [<input-topic> <output-topic> <jq-filter>]...
   """
 
+  def streamJQTransform(streamBuilder: KStreamBuilder, mapper: ObjectMapper,
+    inputTopic: String, outputTopic: String, filter: String): Unit = {
+
+    val compiledFilter: JsonQuery = JsonQuery.compile(filter)
+
+    val rawStream: KStream[String, Array[Byte]] = streamBuilder.stream(Serdes.String, Serdes.ByteArray, inputTopic)
+    val jqTranformStream: KStream[String, JsonNode] = rawStream.flatMapValues(new ValueMapper[Array[Byte], java.lang.Iterable[JsonNode]] {
+      override def apply(value: Array[Byte]): java.lang.Iterable[JsonNode] = {
+        try {
+          val in: JsonNode = mapper.readTree(value)
+          val result: Seq[JsonNode] = compiledFilter.apply(in).asScala
+          List(result(0)).asJava // Only return first element
+        } catch {
+          case e: Exception =>
+            println("Dropping invalid payload ...")
+            List().asJava
+        }
+      }
+    })
+
+    // This stream takes a JSON data, and serializes it to a string
+    val serializeJson: KStream[String, Array[Byte]] = jqTranformStream.mapValues(new ValueMapper[JsonNode, Array[Byte]] {
+      override def apply(value: JsonNode): Array[Byte] = {
+        mapper.writeValueAsBytes(value)
+      }
+    })
+    serializeJson.to(Serdes.String, Serdes.ByteArray, outputTopic)
+
+    println(Console.BLUE + s"Reading data from $inputTopic, applying filter '$filter', writing to $outputTopic" + Console.RESET)
+  }
+
   def main(args: Array[String]): Unit = {
-    if (args.length < 8) {
-      println(usage)
-      System.exit(-1)
-    }
 
     var bootstrapServers = ""
-    var inputTopic = ""
-    var outputTopic = ""
-    var jqFilter = ""
     var restPort: Int = 0
-    args.sliding(2, 2).toList.collect {
-      case Array("--bootstrap-servers", a: String) => bootstrapServers = a
-      case Array("--input-topic", a: String) => inputTopic = a
-      case Array("--output-topic", a: String) => outputTopic = a
-      case Array("--jq-filter", a: String) => jqFilter = a
-      case Array("--rest-port", a: String) => restPort = a.toInt
+
+    var processings: List[(String, String, String)] = List()
+
+    def processArgs(args: List[String]): Boolean = {
+      args match {
+        case "--bootstrap-servers" :: a :: tail => bootstrapServers = a; processArgs(tail)
+        case "--rest-port":: a :: tail => restPort = a.toInt; processArgs(tail)
+        case inputTopic :: outputTopic :: jqFilter :: tail =>
+          processings = (inputTopic, outputTopic, jqFilter) :: processings;
+          processArgs(tail)
+        case Nil => true
+        case _ => println(usage)
+          System.exit(-1)
+          false
+      }
     }
+
+    processArgs(args.toList)
 
     val settings = new Properties
     settings.put(StreamsConfig.APPLICATION_ID_CONFIG, "jq-transformation")
@@ -62,44 +83,20 @@ object JQTransformationStream {
     settings.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
 
     val MAPPER: ObjectMapper = new ObjectMapper();
-    val writer = MAPPER.writer()
-    val jqTransform = new JQTransformation(jqFilter)
 
     val streamBuilder = new KStreamBuilder
-    val rawStream: KStream[String, Array[Byte]] = streamBuilder.stream(Serdes.String, Serdes.ByteArray, inputTopic)
-
-    val jqTranformStream: KStream[String, JsonNode] = rawStream.flatMapValues(new ValueMapper[Array[Byte], java.lang.Iterable[JsonNode]] {
-      override def apply(value: Array[Byte]): java.lang.Iterable[JsonNode] = {
-        try {
-          val in: JsonNode = MAPPER.readTree(value)
-          val result: Seq[JsonNode] = jqTransform.apply(in)
-          return List(result(0)).asJava // Only return first element
-        } catch {
-          case e: Exception =>
-            println("Dropping invalid payload ...")
-            return List().asJava
-        }
-      }
-    })
-
-    // This stream takes a JSON data, and serializes it to a string
-    val serializeJson: KStream[String, Array[Byte]] = jqTranformStream.mapValues(new ValueMapper[JsonNode, Array[Byte]] {
-      override def apply(value: JsonNode): Array[Byte] = {
-        return MAPPER.writeValueAsBytes(value)
-      }
-    })
-    serializeJson.to(Serdes.String, Serdes.ByteArray, outputTopic)
+    for ((i, o, f) <- processings) {
+      streamJQTransform(streamBuilder, MAPPER, i, o, f)
+    }
 
     val streams = new KafkaStreams(streamBuilder, settings)
     streams.cleanUp
     streams.start
     print(streams.toString)
 
-    println(s"Reading data from $inputTopic, applying filter '$jqFilter', writing to $outputTopic")
-
     if (restPort != 0) {
       println("Let's start the http server ...")
-      RestProxy.startServer("localhost", 8888)
+      RestProxy.startServer("localhost", restPort)
     }
   }
 }
