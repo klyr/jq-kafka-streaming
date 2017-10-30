@@ -5,7 +5,7 @@ lazy val root = (project in file(".")).
     inThisBuild(List(
       organization := "org.barbot.jqstream",
       scalaVersion := "2.12.1",
-      version      := "0.2.0"
+      version      := "0.3.0"
     )),
     name := "KafkaStreamingJq",
     libraryDependencies += scalaTest % Test,

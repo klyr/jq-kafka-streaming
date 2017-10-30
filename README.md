@@ -15,7 +15,7 @@ Usage
 
 2. Start the KafkaStreaming application
 
-        $ sbt "run --bootstrap-servers localhost:9092 --input-topic inJson --output-topic outJson --jq-filter "'{"this":.data,"@context":"http://schema.org/lights"}'
+        $ sbt "run --bootstrap-servers localhost:9092 inJson outJson "'{"this":.data,"@context":"http://schema.org/lights"}'
 
 3. Send a JSON payload to the `inJson` topic
 
@@ -30,5 +30,5 @@ To create the standalone jar, execute:
 
 Run it with:
 
-    $ java -jar target/scala-2.12/KafkaStreamingJq-assembly-0.1.0-SNAPSHOT.jar
+    $ java -jar target/scala-2.12/KafkaStreamingJq-assembly-0.3.0-SNAPSHOT.jar
 
