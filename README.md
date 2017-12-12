@@ -30,5 +30,5 @@ To create the standalone jar, execute:
 
 Run it with:
 
-    $ java -jar target/scala-2.12/KafkaStreamingJq-assembly-0.3.0-SNAPSHOT.jar
+    $ java -jar target/scala-2.12/KafkaStreamingJq-assembly-0.4.0-SNAPSHOT.jar
 
