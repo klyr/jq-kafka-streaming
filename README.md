@@ -3,6 +3,13 @@ JQ KafkaStream
 
 This is a simple Scala, KafkaStreaming application doing JQ transformations on one topic.
 
+The JQ filter is applied on a JSON of the following form:
+
+    {
+        "key": The content of the Kafka key,
+        "value": The content of the Kafka message
+    }
+
 Installation
 ------------
 
@@ -15,7 +22,7 @@ Usage
 
 2. Start the KafkaStreaming application
 
-        $ sbt "run --bootstrap-servers localhost:9092 inJson outJson "'{"this":.data,"@context":"http://schema.org/lights"}'
+        $ sbt "run --bootstrap-servers localhost:9092 inJson outJson "'{"this":.value.data,"@context":"http://schema.org/lights"}' '.key.deviceid'
 
 3. Send a JSON payload to the `inJson` topic
 
