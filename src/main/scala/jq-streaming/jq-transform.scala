@@ -17,11 +17,11 @@ import org.apache.kafka.streams.kstream._
 
 import scala.collection.JavaConverters._
 
-//sbt "run --bootstrap-servers localhost:9092 inJson outJson "'{"this":.data,"@context":"http://schema.org/lights"}' inJson_2 outJson_2 "'{"this":.value.data,"@context":"http://schema.org/pollution"}'" '{"deviceid": .value.deviceid}'
+//sbt "run --bootstrap-servers localhost:9092 --application-id 'jq-transformation' inJson outJson "'{"this":.data,"@context":"http://schema.org/lights"}' inJson_2 outJson_2 "'{"this":.value.data,"@context":"http://schema.org/pollution"}'" '{"deviceid": .value.deviceid}'
 
 object JQTransformationStream {
   val usage = """
-    Usage: jq-stream --bootstrap-servers <server1 [serverN]...> [--rest-port <port>] <input-topic> <output-topic> <jq-filter-body> <jq-filter-key> [<input-topic> <output-topic> <jq-filter-body> <jq-filter-key>]...
+    Usage: jq-stream --bootstrap-servers <server1 [serverN]...> [--application-id <appID>] [--rest-port <port>] <input-topic> <output-topic> <jq-filter-body> <jq-filter-key> [<input-topic> <output-topic> <jq-filter-body> <jq-filter-key>]...
   """
 
   def streamJQTransform(streamBuilder: KStreamBuilder, mapper: ObjectMapper,
@@ -70,6 +70,7 @@ object JQTransformationStream {
   def main(args: Array[String]): Unit = {
 
     var bootstrapServers = ""
+    var applicationId = "jq-transformation"
     var restPort: Int = 0
 
     var processings: List[(String, String, String, String)] = List()
@@ -77,6 +78,7 @@ object JQTransformationStream {
     def processArgs(args: List[String]): Boolean = {
       args match {
         case "--bootstrap-servers" :: a :: tail => bootstrapServers = a; processArgs(tail)
+        case "--application-id" :: a :: tail => applicationId = a; processArgs(tail)
         case "--rest-port":: a :: tail => restPort = a.toInt; processArgs(tail)
         case inputTopic :: outputTopic :: jqFilterBody :: jqFilterKey :: tail =>
           processings = (inputTopic, outputTopic, jqFilterBody, jqFilterKey) :: processings;
@@ -91,7 +93,7 @@ object JQTransformationStream {
     processArgs(args.toList)
 
     val settings = new Properties
-    settings.put(StreamsConfig.APPLICATION_ID_CONFIG, "jq-transformation")
+    settings.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId)
     settings.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     settings.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:8989")
     settings.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
