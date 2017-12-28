@@ -36,7 +36,7 @@ object JQTransformationStream {
       override def apply(key: Array[Byte], value: Array[Byte]): java.lang.Iterable[KeyValue[JsonNode, JsonNode]] = {
         try {
           val inValue: JsonNode = mapper.readTree(value)
-          val inKey: JsonNode = mapper.readTree(key)
+          val inKey: JsonNode = if (key != null) mapper.readTree(key) else mapper.createObjectNode()
 
           val top: ObjectNode = mapper.createObjectNode()
           top.put("key", inKey)
